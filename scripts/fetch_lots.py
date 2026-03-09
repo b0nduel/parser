@@ -64,6 +64,12 @@ def _build_ssl_context(cafile: str | None, insecure: bool) -> ssl.SSLContext:
     return ssl.create_default_context()
 
 
+
+
+def _is_cert_error(exc: Exception) -> bool:
+    text = str(exc)
+    return "CERTIFICATE_VERIFY_FAILED" in text or "certificate verify failed" in text
+
 def fetch_torgi(limit: int = 30) -> List[Lot]:
     # Публичный API поиска лотов Torgi.gov.
     url = "https://torgi.gov.ru/new/api/public/lotcards/search?size={}&page=0".format(max(1, min(limit, 100)))
@@ -170,6 +176,12 @@ def main() -> None:
         action="store_true",
         help="Отключить проверку TLS-сертификата (только для локальной диагностики)",
     )
+    ap.add_argument(
+        "--retry-insecure-on-cert-error",
+        action="store_true",
+        default=True,
+        help="Если источники упали на CERTIFICATE_VERIFY_FAILED — автоматически повторить в insecure-режиме",
+    )
     args = ap.parse_args()
 
     global SSL_CONTEXT
@@ -178,15 +190,44 @@ def main() -> None:
     lots: List[Lot] = []
     errors = []
 
+    torgi_error: Exception | None = None
+    fed_error: Exception | None = None
+
     try:
         lots.extend(fetch_torgi(limit=args.limit))
     except Exception as exc:  # noqa: BLE001
+        torgi_error = exc
         errors.append(f"Torgi.gov: {exc}")
 
     try:
         lots.extend(fetch_fedresurs(limit=max(5, args.limit // 2), start_id=50000))
     except Exception as exc:  # noqa: BLE001
+        fed_error = exc
         errors.append(f"Fedresurs: {exc}")
+
+    if args.retry_insecure_on_cert_error and (torgi_error or fed_error):
+        need_retry = any(
+            _is_cert_error(err) for err in [torgi_error, fed_error] if err is not None
+        )
+        if need_retry and not args.insecure:
+            SSL_CONTEXT = _build_ssl_context(cafile=None, insecure=True)
+            retry_errors: list[str] = []
+
+            if torgi_error and _is_cert_error(torgi_error):
+                try:
+                    lots.extend(fetch_torgi(limit=args.limit))
+                    errors.append("Torgi.gov: повтор в insecure-режиме успешен")
+                except Exception as exc:  # noqa: BLE001
+                    retry_errors.append(f"Torgi.gov (retry): {exc}")
+
+            if fed_error and _is_cert_error(fed_error):
+                try:
+                    lots.extend(fetch_fedresurs(limit=max(5, args.limit // 2), start_id=50000))
+                    errors.append("Fedresurs: повтор в insecure-режиме успешен")
+                except Exception as exc:  # noqa: BLE001
+                    retry_errors.append(f"Fedresurs (retry): {exc}")
+
+            errors.extend(retry_errors)
 
     OUT_FILE.parent.mkdir(parents=True, exist_ok=True)
     OUT_FILE.write_text(json.dumps([asdict(x) for x in lots], ensure_ascii=False, indent=2), encoding="utf-8")
@@ -202,6 +243,7 @@ def main() -> None:
             print(" - macOS Python.org: запустите 'Install Certificates.command'.")
             print(" - Если у вас корпоративный прокси: передайте --cafile /path/to/corp-ca.pem.")
             print(" - Для быстрой проверки можно запустить с --insecure (не для production).")
+            print(" - Теперь скрипт также автоматически делает retry в insecure-режиме при CERTIFICATE_VERIFY_FAILED.")
 
 
 if __name__ == "__main__":
