@@ -70,6 +70,67 @@ def _is_cert_error(exc: Exception) -> bool:
     text = str(exc)
     return "CERTIFICATE_VERIFY_FAILED" in text or "certificate verify failed" in text
 
+def _normalize_text(value: object) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if not text or text.lower() in {"null", "none", "не указано", "-", "n/a"}:
+        return ""
+    return re.sub(r"\s+", " ", text)
+
+
+def _find_first_by_keys(data: object, keys: set[str]) -> str:
+    if isinstance(data, dict):
+        # direct matches first
+        for key, value in data.items():
+            if key.lower() in keys:
+                text = _normalize_text(value)
+                if text:
+                    return text
+        # then nested walk
+        for value in data.values():
+            text = _find_first_by_keys(value, keys)
+            if text:
+                return text
+    elif isinstance(data, list):
+        for item in data:
+            text = _find_first_by_keys(item, keys)
+            if text:
+                return text
+    return ""
+
+
+def _extract_address_torgi(item: dict) -> str:
+    # Часто адрес лежит в разных полях и вложенных структурах в зависимости от типа торгов.
+    address_keys = {
+        "lotaddress", "address", "fulladdress", "location", "objectaddress", "propertyaddress",
+        "addressline", "addressstr", "addressstring", "addressfull", "place", "locality", "locationname"
+    }
+    region_keys = {"subjectrfname", "region", "regionname", "fiasregionname", "okatofullname"}
+
+    direct_candidates = [
+        item.get("lotAddress"),
+        item.get("location"),
+        item.get("address"),
+        item.get("fullAddress"),
+        item.get("locationName"),
+    ]
+    for candidate in direct_candidates:
+        text = _normalize_text(candidate)
+        if text:
+            return text
+
+    nested_address = _find_first_by_keys(item, address_keys)
+    if nested_address:
+        return nested_address
+
+    region = _find_first_by_keys(item, region_keys)
+    if region:
+        return region
+
+    return "Не указано"
+
+
 def fetch_torgi(limit: int = 30) -> List[Lot]:
     # Публичный API поиска лотов Torgi.gov.
     url = "https://torgi.gov.ru/new/api/public/lotcards/search?size={}&page=0".format(max(1, min(limit, 100)))
@@ -80,7 +141,7 @@ def fetch_torgi(limit: int = 30) -> List[Lot]:
     for idx, item in enumerate(content, start=1):
         title = item.get("lotName") or item.get("subjectRFName") or item.get("noticeNumber") or "Лот без названия"
         region = item.get("subjectRFName") or "Не указано"
-        address = item.get("lotAddress") or item.get("location") or "Не указано"
+        address = _extract_address_torgi(item)
         lot_id = item.get("id") or item.get("lotNumber") or ""
         price = item.get("priceMin") or item.get("price") or 0
         if isinstance(price, str):
