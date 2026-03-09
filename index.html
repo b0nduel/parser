@@ -292,10 +292,13 @@
       const getBadgeClass = discount => (discount >= 20 ? "good" : discount >= 10 ? "warn" : "bad");
 
       function getAuctionUrl(lot) {
-        const query = encodeURIComponent(`${lot.title} ${lot.address}`);
-        if (lot.source === "Банкротные торги") return `https://bankrot.fedresurs.ru/DebtorsSearch.aspx?searchString=${query}`;
-        if (lot.source === "Федресурс") return `https://fedresurs.ru/search?query=${query}`;
-        return `https://torgi.gov.ru/new/public/lots/search?text=${query}`;
+        const sourceDomain = lot.source === "Торги.gov"
+          ? "torgi.gov.ru"
+          : lot.source === "Федресурс"
+            ? "fedresurs.ru"
+            : "bankrot.fedresurs.ru";
+        const query = encodeURIComponent(`${lot.title} ${lot.address} site:${sourceDomain}`);
+        return `https://yandex.ru/search/?text=${query}`;
       }
 
       function getYandexMapsUrl(address) {
@@ -418,7 +421,7 @@
                 </div>
               </summary>
               <div class="lot-links">
-                <a class="lot-link" href="${getAuctionUrl(lot)}" target="_blank" rel="noopener noreferrer">Открыть страницу торгов</a>
+                <a class="lot-link" href="${getAuctionUrl(lot)}" target="_blank" rel="noopener noreferrer">Найти лот на площадке торгов</a>
                 <a class="lot-link" href="${getYandexMapsUrl(lot.address)}" target="_blank" rel="noopener noreferrer">Открыть в Яндекс.Картах</a>
               </div>
             </details>
