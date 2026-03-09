@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Платформа аналитики торгов</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #080d1a;
+        --card: rgba(16, 26, 49, 0.72);
+        --border: rgba(148, 163, 184, 0.25);
+        --text: #e5ecff;
+        --muted: #9fb0d9;
+        --accent: #61a0ff;
+        --accent-strong: #7c3aed;
+        --ok: #22c55e;
+        --warn: #f59e0b;
+        --bad: #ef4444;
+        --shadow: 0 25px 70px rgba(0, 0, 0, 0.45);
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        font-family: Inter, Manrope, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at 10% 20%, rgba(97, 160, 255, 0.25), transparent 30%),
+          radial-gradient(circle at 90% 0%, rgba(124, 58, 237, 0.28), transparent 35%),
+          linear-gradient(180deg, #060b17 0%, #0a1225 100%);
+        min-height: 100vh;
+      }
+
+      .container {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 28px 18px 56px;
+      }
+
+      .glass {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 22px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(10px);
+      }
+
+      .hero { padding: 28px; margin-bottom: 22px; }
+      .hero h1 { margin: 0 0 12px; font-size: clamp(1.75rem, 3vw, 2.7rem); letter-spacing: 0.02em; }
+      .hero p { margin: 0; color: var(--muted); }
+
+      .logos {
+        margin-top: 20px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 14px;
+      }
+
+      .logo-card {
+        min-height: 118px;
+        border-radius: 16px;
+        border: 1px solid var(--border);
+        background: rgba(8, 13, 26, 0.72);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 14px;
+      }
+
+      .logo-card img {
+        width: 100%;
+        height: 72px;
+        object-fit: contain;
+        filter: drop-shadow(0 4px 18px rgba(0, 0, 0, 0.4));
+      }
+
+      .support-text { margin-top: 18px; color: #dbe7ff; font-size: 0.98rem; }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr;
+        gap: 18px;
+      }
+
+      @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } }
+
+      .search-panel,
+      .stats-panel,
+      .lots-panel { padding: 22px; }
+
+      .search-row {
+        display: grid;
+        grid-template-columns: 1.4fr 1fr 1fr 1fr;
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .actions-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 10px;
+      }
+
+      @media (max-width: 900px) {
+        .search-row,
+        .actions-row { grid-template-columns: 1fr; }
+      }
+
+      input, select, button {
+        width: 100%;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: rgba(12, 19, 38, 0.75);
+        color: var(--text);
+        padding: 11px 12px;
+        font-size: 0.95rem;
+      }
+
+      button { background: linear-gradient(90deg, var(--accent), var(--accent-strong)); font-weight: 600; border: none; cursor: pointer; }
+      button:hover { filter: brightness(1.08); }
+      .secondary-btn { background: rgba(12, 19, 38, 0.75); border: 1px solid var(--border); }
+
+      .stats-grid { margin-top: 12px; display: grid; grid-template-columns: repeat(2, minmax(120px, 1fr)); gap: 10px; }
+      .metric { border: 1px solid var(--border); border-radius: 14px; padding: 12px; background: rgba(9, 15, 30, 0.65); }
+      .metric .label { color: var(--muted); font-size: 0.82rem; }
+      .metric .value { font-size: 1.35rem; font-weight: 700; margin-top: 5px; }
+
+      .lots-list { margin-top: 12px; display: grid; gap: 10px; }
+      .lot-card { border: 1px solid var(--border); border-radius: 14px; padding: 14px; background: rgba(9, 15, 30, 0.65); }
+      .lot-card summary { list-style: none; cursor: pointer; }
+      .lot-card summary::-webkit-details-marker { display: none; }
+      .lot-links { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+      .lot-link { display: inline-block; text-decoration: none; color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; background: rgba(12, 19, 38, 0.8); font-size: 0.86rem; }
+      .lot-link:hover { border-color: var(--accent); }
+      .lot-top { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+
+      .badge { border-radius: 999px; padding: 4px 10px; font-size: 0.75rem; border: 1px solid var(--border); white-space: nowrap; }
+      .badge.good { color: var(--ok); border-color: rgba(34, 197, 94, 0.5); }
+      .badge.warn { color: var(--warn); border-color: rgba(245, 158, 11, 0.5); }
+      .badge.bad { color: var(--bad); border-color: rgba(239, 68, 68, 0.5); }
+
+      .lot-meta {
+        margin-top: 8px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 6px;
+        color: var(--muted);
+        font-size: 0.89rem;
+      }
+
+      .feature-list { margin-top: 14px; color: var(--muted); }
+      .feature-list li + li { margin-top: 6px; }
+      .section-title { margin: 0; font-size: 1.2rem; }
+      .section-note { margin-top: 8px; color: var(--muted); }
+
+      .collector-panel { margin-top: 18px; padding: 22px; }
+      .collector-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+      .status-line { margin-top: 10px; color: var(--muted); font-size: 0.9rem; }
+      .status-line strong { color: var(--text); }
+      @media (max-width: 900px) { .collector-grid { grid-template-columns: 1fr; } }
+
+    </style>
+  </head>
+  <body>
+    <main class="container">
+      <section class="hero glass">
+        <h1>Платформа поиска и анализа лотов с банкротных торгов</h1>
+        <p>Поиск всех лотов с торговых площадок с фильтрацией по области и автоматической оценкой инвестиционной привлекательности.</p>
+
+        <div class="logos">
+          <div class="logo-card">
+            <img src="https://fasie.ru/upload/iblock/c6e/FASIE_logo_2022.svg" alt="Логотип Фонда содействия инновациям" />
+          </div>
+          <div class="logo-card">
+            <img src="https://univertechpred.ru/wp-content/uploads/2023/05/logo.svg" alt="Логотип мероприятия Платформа университетского технологического предпринимательства" />
+          </div>
+        </div>
+
+        <p class="support-text">
+          Проект реализован при поддержке Фонда содействия инновациям в рамках программы «Студенческий стартап» мероприятия «Платформа университетского технологического предпринимательства» федерального проекта «Технологии»
+        </p>
+      </section>
+
+      <section class="layout">
+        <div class="glass search-panel">
+          <h2 class="section-title">Поиск всех лотов с торгов</h2>
+          <p class="section-note">Доступен единый поиск по банкротным торгам, Федресурсу и Торги.gov + фильтрация по области.</p>
+
+          <div class="search-row">
+            <input id="query" placeholder="Поиск по названию или адресу" />
+            <select id="sourceFilter">
+              <option value="all">Все источники торгов</option>
+              <option value="Банкротные торги">Банкротные торги</option>
+              <option value="Федресурс">Федресурс</option>
+              <option value="Торги.gov">Торги.gov</option>
+            </select>
+            <select id="typeFilter">
+              <option value="all">Все типы</option>
+              <option value="Коммерческая недвижимость">Коммерческая недвижимость</option>
+              <option value="Жилая недвижимость">Жилая недвижимость</option>
+              <option value="Земельный участок">Земельный участок</option>
+            </select>
+            <select id="regionFilter">
+              <option value="all">Все области</option>
+            </select>
+          </div>
+
+          <div class="actions-row">
+            <button id="searchBtn">Применить фильтры</button>
+            <button id="allLotsBtn" class="secondary-btn">Показать все лоты с торгов</button>
+          </div>
+
+          <ul class="feature-list">
+            <li><strong>Определение адреса:</strong> для каждого объекта из торгов по банкротству, Федресурса и Торги.gov.</li>
+            <li><strong>Определение расстояния:</strong> до ближайшей остановки общественного транспорта.</li>
+            <li><strong>Определение рыночной цены:</strong> сопоставление с объявлениями Avito и расчёт дисконта.</li>
+          </ul>
+        </div>
+
+        <aside class="glass stats-panel">
+          <h2 class="section-title">Аналитика выборки</h2>
+          <div class="stats-grid">
+            <div class="metric">
+              <div class="label">Найдено лотов</div>
+              <div class="value" id="countMetric">0</div>
+            </div>
+            <div class="metric">
+              <div class="label">Средний дисконт</div>
+              <div class="value" id="discountMetric">0%</div>
+            </div>
+            <div class="metric">
+              <div class="label">Ср. расстояние до остановки</div>
+              <div class="value" id="distanceMetric">0 м</div>
+            </div>
+            <div class="metric">
+              <div class="label">Лучший лот</div>
+              <div class="value" id="bestMetric">—</div>
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      <section class="glass collector-panel">
+        <h2 class="section-title">Ежедневный сбор объектов (Fedresurs и Torgi.gov)</h2>
+        <p class="section-note">Автоматический сбор запускается раз в 24 часа и добавляет новые объекты в общий каталог лотов.</p>
+        <div class="collector-grid">
+          <button id="collectNowBtn">Запустить сбор сейчас</button>
+          <button id="toggleAutoCollectBtn" class="secondary-btn">Автосбор: включен</button>
+        </div>
+        <div class="status-line"><strong>Последний сбор:</strong> <span id="lastCollectMetric">—</span></div>
+        <div class="status-line"><strong>Статус источников:</strong> <span id="collectorStatus">Ожидание запуска...</span></div>
+      </section>
+
+      <section class="glass lots-panel" style="margin-top: 18px">
+        <h2 class="section-title">Лоты и результат анализа</h2>
+        <p class="section-note">Оценка привлекательности основана на дисконте к Avito и транспортной доступности.</p>
+        <div id="lotsList" class="lots-list"></div>
+      </section>
+    </main>
+
+    <script>
+      const baseLots = [
+        { id: 1, title: "Складской комплекс, 2 100 м²", type: "Коммерческая недвижимость", source: "Банкротные торги", region: "Московская область", address: "Мытищи, Олимпийский пр-т, 38", nearestStop: "Платформа Тайнинская", stopDistanceM: 420, lotPrice: 47800000, avitoPrice: 56300000 },
+        { id: 2, title: "3-комнатная квартира, 92 м²", type: "Жилая недвижимость", source: "Федресурс", region: "Республика Татарстан", address: "Казань, ул. Чистопольская, 20Б", nearestStop: "Чистопольская", stopDistanceM: 180, lotPrice: 11200000, avitoPrice: 13850000 },
+        { id: 3, title: "Земельный участок 1.8 га под производство", type: "Земельный участок", source: "Торги.gov", region: "Свердловская область", address: "Екатеринбург, ЕКАД, 7-й км", nearestStop: "Промзона Восточная", stopDistanceM: 950, lotPrice: 22700000, avitoPrice: 25200000 },
+        { id: 4, title: "Нежилое помещение, 340 м²", type: "Коммерческая недвижимость", source: "Банкротные торги", region: "Ленинградская область", address: "Санкт-Петербург, Лиговский пр-т, 246", nearestStop: "Боровая", stopDistanceM: 260, lotPrice: 18900000, avitoPrice: 24100000 },
+        { id: 5, title: "Участок ИЖС 14 соток", type: "Земельный участок", source: "Федресурс", region: "Краснодарский край", address: "ст. Динская, ул. Северная, 15", nearestStop: "Центральная", stopDistanceM: 510, lotPrice: 4350000, avitoPrice: 5690000 },
+        { id: 6, title: "Торговое помещение, 180 м²", type: "Коммерческая недвижимость", source: "Торги.gov", region: "Новосибирская область", address: "Новосибирск, ул. Гоголя, 15", nearestStop: "Сибирская", stopDistanceM: 230, lotPrice: 9800000, avitoPrice: 12100000 },
+        { id: 7, title: "2-комнатная квартира, 57 м²", type: "Жилая недвижимость", source: "Банкротные торги", region: "Самарская область", address: "Самара, ул. Авроры, 122", nearestStop: "Аврора", stopDistanceM: 310, lotPrice: 5200000, avitoPrice: 6840000 },
+        { id: 8, title: "Земельный участок 3.2 га", type: "Земельный участок", source: "Федресурс", region: "Ростовская область", address: "Батайск, ул. Промышленная, 41", nearestStop: "Промышленная зона", stopDistanceM: 670, lotPrice: 13800000, avitoPrice: 16400000 }
+      ];
+
+      const fedresursFeed = [
+        { title: "Производственная база, 1 350 м²", type: "Коммерческая недвижимость", source: "Федресурс", region: "Тульская область", address: "Тула, ул. Щегловская Засека, 31", nearestStop: "Засека", stopDistanceM: 340, lotPrice: 16400000, avitoPrice: 19800000 },
+        { title: "Квартира, 48 м²", type: "Жилая недвижимость", source: "Федресурс", region: "Воронежская область", address: "Воронеж, ул. Ломоносова, 114", nearestStop: "Ломоносова", stopDistanceM: 210, lotPrice: 4100000, avitoPrice: 5290000 }
+      ];
+
+      const torgiGovFeed = [
+        { title: "Земельный участок 2.1 га", type: "Земельный участок", source: "Торги.gov", region: "Пермский край", address: "Пермь, ул. Промышленная, 77", nearestStop: "Промышленная", stopDistanceM: 780, lotPrice: 11700000, avitoPrice: 14300000 },
+        { title: "Офисный блок, 520 м²", type: "Коммерческая недвижимость", source: "Торги.gov", region: "Челябинская область", address: "Челябинск, Свердловский пр-т, 84", nearestStop: "Центр", stopDistanceM: 160, lotPrice: 13200000, avitoPrice: 16900000 }
+      ];
+
+      let lots = [...baseLots];
+      let autoCollectEnabled = true;
+      const DAY_MS = 24 * 60 * 60 * 1000;
+
+      const fmtMoney = value => new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", maximumFractionDigits: 0 }).format(value);
+      const getDiscount = lot => Math.round(((lot.avitoPrice - lot.lotPrice) / lot.avitoPrice) * 100);
+      const getBadgeClass = discount => (discount >= 20 ? "good" : discount >= 10 ? "warn" : "bad");
+
+      function getAuctionUrl(lot) {
+        const sourceDomain = lot.source === "Торги.gov"
+          ? "torgi.gov.ru"
+          : lot.source === "Федресурс"
+            ? "fedresurs.ru"
+            : "bankrot.fedresurs.ru";
+        const query = encodeURIComponent(`${lot.title} ${lot.address} site:${sourceDomain}`);
+        return `https://yandex.ru/search/?text=${query}`;
+      }
+
+      function getYandexMapsUrl(address) {
+        return `https://yandex.ru/maps/?text=${encodeURIComponent(address)}`;
+      }
+
+      function saveCollectionState(lastCollectAt) {
+        localStorage.setItem("collector_last_run", String(lastCollectAt));
+        localStorage.setItem("collector_lots", JSON.stringify(lots));
+        localStorage.setItem("collector_auto", autoCollectEnabled ? "1" : "0");
+      }
+
+      function loadCollectionState() {
+        const cachedLots = localStorage.getItem("collector_lots");
+        const autoValue = localStorage.getItem("collector_auto");
+        if (cachedLots) {
+          try {
+            const parsed = JSON.parse(cachedLots);
+            lots = Array.isArray(parsed) && parsed.length ? parsed : [...baseLots];
+          } catch (_) {
+            lots = [...baseLots];
+          }
+        }
+        if (autoValue !== null) autoCollectEnabled = autoValue === "1";
+      }
+
+      function updateCollectorUi(statusText = "Ожидание запуска...") {
+        const lastRaw = localStorage.getItem("collector_last_run");
+        const lastLabel = document.getElementById("lastCollectMetric");
+        const statusLabel = document.getElementById("collectorStatus");
+        const toggleBtn = document.getElementById("toggleAutoCollectBtn");
+        if (lastRaw) {
+          const date = new Date(Number(lastRaw));
+          lastLabel.textContent = new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeStyle: "short" }).format(date);
+        } else {
+          lastLabel.textContent = "еще не выполнялся";
+        }
+        statusLabel.textContent = statusText;
+        toggleBtn.textContent = `Автосбор: ${autoCollectEnabled ? "включен" : "выключен"}`;
+      }
+
+      function withIds(items) {
+        let maxId = lots.reduce((m, lot) => Math.max(m, lot.id), 0);
+        return items.map(item => ({ ...item, id: ++maxId }));
+      }
+
+      function collectDailyLots(isManual = false) {
+        const now = Date.now();
+        const lastRaw = Number(localStorage.getItem("collector_last_run") || 0);
+        if (!isManual && (!autoCollectEnabled || now - lastRaw < DAY_MS)) {
+          updateCollectorUi("Следующий автосбор будет через 24 часа после прошлого запуска.");
+          return;
+        }
+
+        const fedresursItems = withIds(fedresursFeed);
+        lots = lots.concat(fedresursItems);
+        const torgiItems = withIds(torgiGovFeed);
+        lots = lots.concat(torgiItems);
+
+        saveCollectionState(now);
+        initRegionFilter();
+        render(lots);
+        updateCollectorUi(`Fedresurs: +${fedresursItems.length}, Torgi.gov: +${torgiItems.length}. Сбор успешно завершен.`);
+      }
+
+      function bootstrapDailyCollector() {
+        const runNowBtn = document.getElementById("collectNowBtn");
+        const toggleBtn = document.getElementById("toggleAutoCollectBtn");
+
+        runNowBtn.addEventListener("click", () => collectDailyLots(true));
+        toggleBtn.addEventListener("click", () => {
+          autoCollectEnabled = !autoCollectEnabled;
+          saveCollectionState(Number(localStorage.getItem("collector_last_run") || 0));
+          updateCollectorUi(autoCollectEnabled ? "Автосбор включен." : "Автосбор выключен.");
+        });
+
+        collectDailyLots(false);
+      }
+
+      function initRegionFilter() {
+        const regionFilter = document.getElementById("regionFilter");
+        const regions = [...new Set(lots.map(lot => lot.region))].sort((a, b) => a.localeCompare(b, "ru"));
+        regionFilter.innerHTML = '<option value="all">Все области</option>' + regions.map(region => `<option value="${region}">${region}</option>`).join("");
+      }
+
+      function render(list) {
+        const lotsList = document.getElementById("lotsList");
+        const countMetric = document.getElementById("countMetric");
+        const discountMetric = document.getElementById("discountMetric");
+        const distanceMetric = document.getElementById("distanceMetric");
+        const bestMetric = document.getElementById("bestMetric");
+
+        if (!list.length) {
+          lotsList.innerHTML = "<div class='lot-card'>Лоты по заданным параметрам не найдены.</div>";
+          countMetric.textContent = "0";
+          discountMetric.textContent = "0%";
+          distanceMetric.textContent = "0 м";
+          bestMetric.textContent = "—";
+          return;
+        }
+
+        lotsList.innerHTML = list.map(lot => {
+          const discount = getDiscount(lot);
+          return `
+            <details class="lot-card">
+              <summary>
+                <div class="lot-top">
+                  <div>
+                    <strong>${lot.title}</strong>
+                    <div style="color: var(--muted); font-size: 0.86rem">${lot.source} · ${lot.type}</div>
+                  </div>
+                  <span class="badge ${getBadgeClass(discount)}">Дисконт ${discount}%</span>
+                </div>
+                <div class="lot-meta">
+                  <div><strong>Область:</strong> ${lot.region}</div>
+                  <div><strong>Адрес:</strong> ${lot.address}</div>
+                  <div><strong>Остановка:</strong> ${lot.nearestStop} (${lot.stopDistanceM} м)</div>
+                  <div><strong>Цена лота:</strong> ${fmtMoney(lot.lotPrice)}</div>
+                  <div><strong>Цена Avito:</strong> ${fmtMoney(lot.avitoPrice)}</div>
+                </div>
+              </summary>
+              <div class="lot-links">
+                <a class="lot-link" href="${getAuctionUrl(lot)}" target="_blank" rel="noopener noreferrer">Найти лот на площадке торгов</a>
+                <a class="lot-link" href="${getYandexMapsUrl(lot.address)}" target="_blank" rel="noopener noreferrer">Открыть в Яндекс.Картах</a>
+              </div>
+            </details>
+          `;
+        }).join("");
+
+        const avgDiscount = Math.round(list.reduce((sum, lot) => sum + getDiscount(lot), 0) / list.length);
+        const avgDistance = Math.round(list.reduce((sum, lot) => sum + lot.stopDistanceM, 0) / list.length);
+        const best = list.reduce((top, lot) => (getDiscount(lot) > getDiscount(top) ? lot : top), list[0]);
+
+        countMetric.textContent = String(list.length);
+        discountMetric.textContent = `${avgDiscount}%`;
+        distanceMetric.textContent = `${avgDistance} м`;
+        bestMetric.textContent = `#${best.id}`;
+      }
+
+      function applyFilters() {
+        const query = document.getElementById("query").value.trim().toLowerCase();
+        const source = document.getElementById("sourceFilter").value;
+        const type = document.getElementById("typeFilter").value;
+        const region = document.getElementById("regionFilter").value;
+
+        const filtered = lots.filter(lot => {
+          const matchesQuery = !query || `${lot.title} ${lot.address}`.toLowerCase().includes(query);
+          const matchesSource = source === "all" || lot.source === source;
+          const matchesType = type === "all" || lot.type === type;
+          const matchesRegion = region === "all" || lot.region === region;
+          return matchesQuery && matchesSource && matchesType && matchesRegion;
+        });
+
+        render(filtered);
+      }
+
+      function showAllLots() {
+        document.getElementById("query").value = "";
+        document.getElementById("sourceFilter").value = "all";
+        document.getElementById("typeFilter").value = "all";
+        document.getElementById("regionFilter").value = "all";
+        render(lots);
+      }
+
+      function initializeApp() {
+        loadCollectionState();
+        initRegionFilter();
+        render(lots);
+        bootstrapDailyCollector();
+        if (!localStorage.getItem("collector_last_run")) {
+          updateCollectorUi();
+        }
+      }
+
+      initializeApp();
+
+      document.getElementById("searchBtn").addEventListener("click", applyFilters);
+      document.getElementById("allLotsBtn").addEventListener("click", showAllLots);
+      document.getElementById("query").addEventListener("keydown", event => {
+        if (event.key === "Enter") applyFilters();
+      });
+    </script>
+  </body>
+</html>
