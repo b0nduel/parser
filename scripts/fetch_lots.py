@@ -40,16 +40,20 @@ class Lot:
 
 SSL_CONTEXT: ssl.SSLContext | None = None
 
+REQUEST_TIMEOUT = 15
+MAX_PAGES_TORGI = 200
+MAX_PAGES_FED = 80
 
-def _http_get_json(url: str, timeout: int = 30) -> dict:
+
+def _http_get_json(url: str, timeout: int = 15) -> dict:
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=timeout, context=SSL_CONTEXT) as resp:
+    with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT if timeout is None else timeout, context=SSL_CONTEXT) as resp:
         return json.loads(resp.read().decode("utf-8", errors="ignore"))
 
 
-def _http_get_text(url: str, timeout: int = 30) -> str:
+def _http_get_text(url: str, timeout: int = 15) -> str:
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=timeout, context=SSL_CONTEXT) as resp:
+    with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT if timeout is None else timeout, context=SSL_CONTEXT) as resp:
         return resp.read().decode("utf-8", errors="ignore")
 
 
@@ -154,10 +158,11 @@ def _normalize_price(raw: object) -> int:
         return 0
 
 
-def _iter_torgi_content(page_size: int = 100) -> Iterable[dict]:
+def _iter_torgi_content(page_size: int = 100, max_pages: int | None = None) -> Iterable[dict]:
     page = 0
     total_pages = None
-    while True:
+    effective_max = MAX_PAGES_TORGI if max_pages is None else max_pages
+    while page < effective_max:
         url = f"https://torgi.gov.ru/new/api/public/lotcards/search?size={page_size}&page={page}"
         payload = _http_get_json(url)
         content = payload.get("content") or []
@@ -204,9 +209,10 @@ class FedresursTradeParser(HTMLParser):
             self._capture = False
 
 
-def _iter_fedresurs_links(max_pages: int = 50) -> Iterable[tuple[str, str]]:
+def _iter_fedresurs_links(max_pages: int | None = None) -> Iterable[tuple[str, str]]:
     seen: set[str] = set()
-    for page in range(1, max_pages + 1):
+    effective_max = MAX_PAGES_FED if max_pages is None else max_pages
+    for page in range(1, effective_max + 1):
         # На сайте встречаются разные схемы пагинации; пробуем наиболее частую.
         if page == 1:
             url = "https://bankrot.fedresurs.ru/TradeList.aspx"
@@ -230,9 +236,9 @@ def _iter_fedresurs_links(max_pages: int = 50) -> Iterable[tuple[str, str]]:
             break
 
 
-def fetch_torgi(limit: int = 0, start_id: int = 1) -> List[Lot]:
+def fetch_torgi(limit: int = 0, start_id: int = 1, max_pages: int | None = None) -> List[Lot]:
     lots: List[Lot] = []
-    for idx, item in enumerate(_iter_torgi_content(page_size=100), start=start_id):
+    for idx, item in enumerate(_iter_torgi_content(page_size=100, max_pages=max_pages), start=start_id):
         title = item.get("lotName") or item.get("subjectRFName") or item.get("noticeNumber") or "Лот без названия"
         region = _normalize_text(item.get("subjectRFName")) or "Не указано"
         address = _extract_address_torgi(item)
@@ -259,9 +265,9 @@ def fetch_torgi(limit: int = 0, start_id: int = 1) -> List[Lot]:
     return lots
 
 
-def fetch_fedresurs(limit: int = 0, start_id: int = 50000) -> List[Lot]:
+def fetch_fedresurs(limit: int = 0, start_id: int = 50000, max_pages: int | None = None) -> List[Lot]:
     lots: List[Lot] = []
-    for i, (url, title) in enumerate(_iter_fedresurs_links(max_pages=80), start=1):
+    for i, (url, title) in enumerate(_iter_fedresurs_links(max_pages=max_pages), start=1):
         address = _parse_address_from_title(title) or "Не указано"
         lots.append(
             Lot(
@@ -283,7 +289,7 @@ def fetch_fedresurs(limit: int = 0, start_id: int = 50000) -> List[Lot]:
     return lots
 
 
-def _collect_once(limit: int) -> tuple[list[Lot], list[str], Exception | None, Exception | None]:
+def _collect_once(limit: int, max_pages_torgi: int | None = None, max_pages_fed: int | None = None) -> tuple[list[Lot], list[str], Exception | None, Exception | None]:
     lots: List[Lot] = []
     errors: List[str] = []
     torgi_error: Exception | None = None
@@ -291,14 +297,14 @@ def _collect_once(limit: int) -> tuple[list[Lot], list[str], Exception | None, E
 
     try:
         torgi_limit = limit if limit else 0
-        lots.extend(fetch_torgi(limit=torgi_limit, start_id=1))
+        lots.extend(fetch_torgi(limit=torgi_limit, start_id=1, max_pages=max_pages_torgi))
     except Exception as exc:  # noqa: BLE001
         torgi_error = exc
         errors.append(f"Torgi.gov: {exc}")
 
     try:
         fed_limit = max(5, limit // 2) if limit else 0
-        lots.extend(fetch_fedresurs(limit=fed_limit, start_id=50000))
+        lots.extend(fetch_fedresurs(limit=fed_limit, start_id=50000, max_pages=max_pages_fed))
     except Exception as exc:  # noqa: BLE001
         fed_error = exc
         errors.append(f"Fedresurs: {exc}")
@@ -309,6 +315,9 @@ def _collect_once(limit: int) -> tuple[list[Lot], list[str], Exception | None, E
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0, help="Лимит итоговых объектов (0 = собрать все доступные)")
+    ap.add_argument("--request-timeout", type=int, default=15, help="Таймаут HTTP-запроса в секундах")
+    ap.add_argument("--max-pages-torgi", type=int, default=200, help="Максимум страниц Torgi.gov за запуск")
+    ap.add_argument("--max-pages-fed", type=int, default=80, help="Максимум страниц Fedresurs за запуск")
     ap.add_argument("--cafile", type=str, default=None, help="Путь к CA bundle (например, /etc/ssl/cert.pem или corp-ca.pem)")
     ap.add_argument("--insecure", action="store_true", help="Отключить проверку TLS-сертификата (только для локальной диагностики)")
     ap.add_argument(
@@ -319,16 +328,19 @@ def main() -> None:
     )
     args = ap.parse_args()
 
-    global SSL_CONTEXT
+    global SSL_CONTEXT, REQUEST_TIMEOUT, MAX_PAGES_TORGI, MAX_PAGES_FED
     SSL_CONTEXT = _build_ssl_context(args.cafile, args.insecure)
+    REQUEST_TIMEOUT = max(3, int(args.request_timeout))
+    MAX_PAGES_TORGI = max(1, int(args.max_pages_torgi))
+    MAX_PAGES_FED = max(1, int(args.max_pages_fed))
 
-    lots, errors, torgi_error, fed_error = _collect_once(limit=args.limit)
+    lots, errors, torgi_error, fed_error = _collect_once(limit=args.limit, max_pages_torgi=MAX_PAGES_TORGI, max_pages_fed=MAX_PAGES_FED)
 
     if args.retry_insecure_on_cert_error and (torgi_error or fed_error):
         need_retry = any(_is_cert_error(err) for err in [torgi_error, fed_error] if err is not None)
         if need_retry and not args.insecure:
             SSL_CONTEXT = _build_ssl_context(cafile=None, insecure=True)
-            retry_lots, retry_errors, _, _ = _collect_once(limit=args.limit)
+            retry_lots, retry_errors, _, _ = _collect_once(limit=args.limit, max_pages_torgi=MAX_PAGES_TORGI, max_pages_fed=MAX_PAGES_FED)
             # если retry дал результат — используем его как основной
             if retry_lots:
                 lots = retry_lots
@@ -352,4 +364,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nInterrupted by user (Ctrl+C). Partial results may be incomplete.")
